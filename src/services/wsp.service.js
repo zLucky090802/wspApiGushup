@@ -18,7 +18,9 @@ export async function sendToGupshup({
 
   try {
     if (!process.env.GUPSHUP_URL || !process.env.APIKEY_GUPSHUP) {
-      throw new Error("Faltan variables de entorno: GUPSHUP_URL o APIKEY_GUPSHUP");
+      throw new Error(
+        "Faltan variables de entorno: GUPSHUP_URL o APIKEY_GUPSHUP"
+      );
     }
 
     const resp = await axios.post(process.env.GUPSHUP_URL, params, {
@@ -63,6 +65,36 @@ export function sendImage({
   const message = {
     type: "image",
     caption: caption || filename || "",
+  };
+
+  if (attachmentUrl) {
+    message.originalUrl = attachmentUrl;
+    message.previewUrl = attachmentUrl;
+  } else if (attachmentId) {
+    const base = process.env.XCALLY_URL?.replace(/\/$/, "") || "";
+    message.originalUrl = `${base}/files/${attachmentId}`;
+    message.previewUrl = `${base}/files/${attachmentId}`;
+  }
+
+  return sendToGupshup({
+    source,
+    destination,
+    message,
+  });
+}
+
+export function sendDocument(
+  source,
+  destination,
+  caption,
+  attachmentId,
+  attachmentUrl,
+  filename
+) {
+  const message = {
+    type: "file",
+    caption: caption || "",
+    filename: filename || "documento.pdf",
   };
 
   if (attachmentUrl) {

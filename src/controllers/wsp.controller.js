@@ -11,11 +11,11 @@ export async function decideAndSend(req, res) {
   try {
     const b = req.body;
 
-    // 🧩 Determinar origen y destino según el formato del payload de XCALLY
+    
     const source = b.from || b.Contact?.phone || b.contact?.phone;
     const destination = b.Contact?.phone || b.contact?.phone || b.to || b.destination;
 
-    // 🔍 Logs para depuración
+
     console.log(`[XCALLY PAYLOAD]`, JSON.stringify(b, null, 2));
     console.log(`[INFO] source=${source}, destination=${destination}`);
 
@@ -28,7 +28,7 @@ export async function decideAndSend(req, res) {
       });
     }
 
-    // 🔎 Detección del tipo de mensaje
+
     const isMedia =
       !!b.AttachmentId ||
       !!b.attachmentId ||
@@ -36,7 +36,7 @@ export async function decideAndSend(req, res) {
       !!b.url;
     const isText = !isMedia && typeof b.body === "string" && b.body.trim().length > 0;
 
-    // 🟢 CASO 1: mensaje de texto
+    
     if (isText) {
       console.log(`[FLOW] Enviando texto desde ${source} hacia ${destination}`);
 
@@ -57,7 +57,7 @@ export async function decideAndSend(req, res) {
       });
     }
 
-    // 🟠 CASO 2: mensaje con adjunto (imagen, audio, etc.)
+    
     if (isMedia) {
       console.log(`[FLOW] Enviando media desde ${source} hacia ${destination}`);
 
@@ -83,7 +83,7 @@ export async function decideAndSend(req, res) {
       });
     }
 
-    // 🚫 Si no se reconoce el tipo de mensaje
+  
     return res.status(400).json({
       ok: false,
       message: "No se pudo determinar el tipo de mensaje (texto o media).",
