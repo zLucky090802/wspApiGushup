@@ -1,112 +1,91 @@
 // controllers/waController.js
-import { sendText, sendImage } from "../services/wsp.service.js";
+import { sendText, sendImage, sendDocument } from "../services/wsp.service.js";
 
-/**
- * Controlador principal:
- *  - Usa solo los datos del payload que XCALLY manda al Reply URL.
- *  - Identifica automáticamente si el mensaje es de texto o media (AttachmentId, attachmentUrl, url).
- *  - Determina correctamente el source (línea Gupshup) y el destination (usuario).
- */
+const IMAGE_EXTS = new Set(["jpg","jpeg","png","gif","bmp","png"]);
+const DOC_EXTS   = new Set(["pdf","doc","docx","xls","xlsx","ppt","pptx","csv","txt","rtf","zip","rar","7z","json","xml"]);
+
+const norm = v => (String(v || "").match(/\d+/g) || []).join(""); // solo dígitos
+const extOf = (v) => {
+  if (!v) return null;
+  const clean = String(v).split(/[?#]/)[0];
+  const m = clean.match(/\.([a-z0-9]+)$/i);
+  return m ? m[1].toLowerCase() : null;
+};
+
 export async function decideAndSend(req, res) {
   try {
     const b = req.body;
 
-    
-    const source = b.from || b.Contact?.phone || b.contact?.phone;
-    const destination = b.Contact?.phone || b.contact?.phone || b.to || b.destination;
+    // ✅ source: primero ENV, si no existe usa el 'from' del payload
+    const source = norm(process.env.WSP_SOURCE || b.from);
 
+    // ✅ destination: del contacto/usuario
+    const destination = norm(
+      b?.Contact?.phone ||
+      b?.contact?.phone ||
+      b?.to ||
+      b?.destination ||
+      ""               // no usar 'from' aquí para no invertir roles
+    );
 
-    console.log(`[XCALLY PAYLOAD]`, JSON.stringify(b, null, 2));
-    console.log(`[INFO] source=${source}, destination=${destination}`);
+    console.log("[ENV] WSP_SOURCE raw:", process.env.WSP_SOURCE);
+    console.log("[INFO] src/dst (norm):", source, destination);
 
-    // ⚠️ Validación básica
     if (!source || !destination) {
       return res.status(400).json({
         ok: false,
-        message: "No se pudieron determinar los números (source y destination).",
-        hint: "Verifica que XCALLY esté enviando 'from' y 'Contact.phone'.",
+        message: "Faltan source o destination tras normalizar.",
+        hint: "Revisa .env (WSP_SOURCE sin comillas/espacios) o envía Contact.phone en el payload."
       });
     }
 
+    const hasMedia =
+      !!b.AttachmentId || !!b.attachmentId || !!b.attachmentUrl || !!b.url;
 
-    const isMedia =
-      !!b.AttachmentId ||
-      !!b.attachmentId ||
-      !!b.attachmentUrl ||
-      !!b.url;
-    const isText = !isMedia && typeof b.body === "string" && b.body.trim().length > 0;
+    const isText = !hasMedia && typeof b.body === "string" && b.body.trim().length > 0;
 
-    
     if (isText) {
-      console.log(`[FLOW] Enviando texto desde ${source} hacia ${destination}`);
-
-      const text = b.body;
       const data = await sendText({
-        source,            // desde el payload
-        destination,       // desde el payload
-        text,
-        previewUrl: true,
-        context: b.context, // si XCALLY lo manda
-        srcName: process.env.SRC_NAME || "TedLasso",
-      });
-
-      return res.status(200).json({
-        ok: true,
-        flow: "xcally-inbound-text",
-        data,
-      });
-    }
-
-    
-    if (isMedia) {
-      console.log(`[FLOW] Enviando media desde ${source} hacia ${destination}`);
-
-      const attachmentId = b.AttachmentId || b.attachmentId;
-      const caption = b.body || b.caption || "";
-      const filename = b.filename || b.body || "file";
-      const attachmentUrl = b.attachmentUrl || b.url;
-
-      const data = await sendImage({
         source,
         destination,
-        caption,
-        attachmentId,
-        filename,
-        attachmentUrl,
+        text: b.body,
+        previewUrl: true,
+        context: b.context,
         srcName: process.env.SRC_NAME || "TedLasso",
       });
-
-      return res.status(200).json({
-        ok: true,
-        flow: "xcally-inbound-media",
-        data,
-      });
+      return res.status(200).json({ ok: true, flow: "text", data });
     }
 
-  
-    return res.status(400).json({
-      ok: false,
-      message: "No se pudo determinar el tipo de mensaje (texto o media).",
-      example: {
-        text: {
-          from: "18884050633",
-          body: "Hola",
-          Contact: { phone: "573053534911" },
-        },
-        media: {
-          from: "18884050633",
-          body: "Imagen de prueba",
-          attachmentUrl: "https://upload.wikimedia.org/wikipedia/commons/3/3f/JPEG_example_flower.jpg",
-          Contact: { phone: "573053534911" },
-        },
-      },
-    });
+    if (hasMedia) {
+      const attachmentId  = b.AttachmentId || b.attachmentId;
+      const attachmentUrl = b.attachmentUrl || b.url;
+      const filename      = b.filename || b.body || "file";
+      const caption       = b.body || b.caption || "";
+
+      const ext = extOf(attachmentUrl) || extOf(filename) || null;
+      const kind = ext
+        ? (IMAGE_EXTS.has(ext) ? "image" : (DOC_EXTS.has(ext) ? "document" : "unknown"))
+        : "unknown";
+
+      if (kind === "image") {
+        const data = await sendImage({
+          source, destination, caption, attachmentId, attachmentUrl, filename,
+          srcName: process.env.SRC_NAME || "TedLasso",
+        });
+        return res.status(200).json({ ok: true, flow: "image", data });
+      }
+
+      const data = await sendDocument({
+        source, destination, caption, attachmentId, attachmentUrl, filename,
+        srcName: process.env.SRC_NAME || "TedLasso",
+      });
+      return res.status(200).json({ ok: true, flow: kind === "document" ? "document" : "media-unknown->document", data });
+    }
+
+    return res.status(400).json({ ok: false, message: "No se determinó texto ni media." });
   } catch (err) {
-    console.error("[ERROR][decideAndSend]", err.response?.data || err.message);
     return res.status(err.response?.status || 500).json({
-      ok: false,
-      message: err.message,
-      response: err.response?.data || null,
+      ok:false, message: err.message, response: err.response?.data || null
     });
   }
 }

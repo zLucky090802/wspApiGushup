@@ -11,8 +11,8 @@ export async function sendToGupshup({
 }) {
   const params = new URLSearchParams();
   params.append("channel", "whatsapp");
-  params.append("source", source);
-  params.append("destination", destination);
+  params.append("source", '18884050633');
+  params.append("destination", '573053534911');
   params.append("message", JSON.stringify(message));
   params.append("src.name", srcName);
 
@@ -82,33 +82,32 @@ export function sendImage({
     message,
   });
 }
-
-export function sendDocument(
-  source,
-  destination,
-  caption,
-  attachmentId,
-  attachmentUrl,
-  filename
-) {
-  const message = {
-    type: "file",
-    caption: caption || "",
-    filename: filename || "documento.pdf",
-  };
-
-  if (attachmentUrl) {
-    message.originalUrl = attachmentUrl;
-    message.previewUrl = attachmentUrl;
-  } else if (attachmentId) {
-    const base = process.env.XCALLY_URL?.replace(/\/$/, "") || "";
-    message.originalUrl = `${base}/files/${attachmentId}`;
-    message.previewUrl = `${base}/files/${attachmentId}`;
-  }
-
-  return sendToGupshup({
+export function sendDocument({
     source,
     destination,
-    message,
-  });
-}
+    caption,
+    attachmentId,
+    attachmentUrl,
+    filename,
+  }) {
+    const message = {
+      type: "file",
+      caption: caption || "",
+      filename: filename || "documento.pdf",
+    };
+  
+    if (attachmentUrl) {
+      // Para documentos: usa `url` (más compatible)
+      message.url = attachmentUrl;
+      // (Opcional) también puedes incluir estos por compatibilidad cruzada:
+      // message.originalUrl = attachmentUrl;
+      // message.previewUrl  = attachmentUrl;
+    } else if (attachmentId) {
+      // Si ya tienes el media subido/hosteado en XCALLY por ID:
+      const base = process.env.XCALLY_URL?.replace(/\/$/, "") || "";
+      message.url = `${base}/files/${attachmentId}`;
+    }
+  
+    return sendToGupshup({ source, destination, message });
+  }
+  
