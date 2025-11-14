@@ -91,10 +91,11 @@ export function sendDocument({
     filename,
   }) {
     const message = {
-      type: "file",
-      caption: caption || "",
-      filename: filename || "documento.pdf",
-    };
+        type: "file",
+        caption: caption || "",
+        filename: filename || "documento.pdf",
+        url: attachmentUrl,          // <— clave para file
+      };
   
     if (attachmentUrl) {
       // Para documentos: usa `url` (más compatible)
@@ -106,6 +107,33 @@ export function sendDocument({
       // Si ya tienes el media subido/hosteado en XCALLY por ID:
       const base = process.env.XCALLY_URL?.replace(/\/$/, "") || "";
       message.url = `${base}/files/${attachmentId}`;
+    }
+  
+    return sendToGupshup({ source, destination, message });
+  }
+  
+
+  export function sendAudio({
+    source,
+    destination,
+    attachmentUrl,   // URL pública al .mp3/.ogg/.m4a/.aac/.wav
+    attachmentId,    // opcional: id de XCALLY (si no tienes URL)
+    gupshupMediaId,  // opcional: id de media ya subido en Gupshup (si lo usas)
+  }) {
+    const message = { type: "audio" };
+  
+    if (gupshupMediaId) {
+      // Si ya tienes el media subido en Gupshup
+      message.id = gupshupMediaId;
+    } else if (attachmentUrl) {
+      // URL directa al audio
+      message.url = attachmentUrl;
+    } else if (attachmentId) {
+      // Construye la URL desde XCALLY si sólo tienes el ID
+      const base = process.env.XCALLY_URL?.replace(/\/$/, "") || "";
+      message.url = `${base}/files/${attachmentId}`;
+    } else {
+      throw new Error("Falta attachmentUrl, attachmentId o gupshupMediaId para audio");
     }
   
     return sendToGupshup({ source, destination, message });
