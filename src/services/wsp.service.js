@@ -138,4 +138,43 @@ export function sendDocument({
   
     return sendToGupshup({ source, destination, message });
   }
+
+  /**
+ * Enviar video
+ */
+export function sendVideo({
+    source,
+    destination,
+    caption,
+    attachmentUrl,  // URL pública del mp4
+    attachmentId,   // opcional: id en XCALLY si no tienes URL directa
+    filename,       // opcional: por si quieres almacenar el nombre del archivo
+  }) {
+    const message = {
+      type: "video",
+      caption: caption || filename || "",
+    };
+  
+    if (attachmentUrl) {
+      // Caso como el curl de ejemplo: URL directa
+      message.url = attachmentUrl;
+      message.previewUrl = attachmentUrl;
+    } else if (attachmentId) {
+      // Caso en el que sólo tienes el ID de XCALLY
+      const base = process.env.XCALLY_URL?.replace(/\/$/, "") || "";
+      const fileUrl = `${base}/files/${attachmentId}`;
+  
+      message.url = fileUrl;
+      message.previewUrl = fileUrl;
+    } else {
+      throw new Error("Falta attachmentUrl o attachmentId para video");
+    }
+  
+    return sendToGupshup({
+      source,
+      destination,
+      message,
+    });
+  }
+  
   
